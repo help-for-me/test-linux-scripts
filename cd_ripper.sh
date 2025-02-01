@@ -4,7 +4,7 @@
 # This script automates CD ripping using whipper, beets, and dialog for user input.
 #
 # Features:
-#   • On first interactive run, if no configuration file exists, prompt via dialog for:
+#   • On first interactive run (if no configuration file exists), prompt via dialog for:
 #         - Temporary ripping directory
 #         - Final destination directory for processed CDs
 #         - Discord webhook URL for notifications
@@ -12,6 +12,9 @@
 #
 #   • When run with "--install", the script installs itself as a systemd service so that
 #     it runs automatically on boot.
+#
+#   • When run with "--update", the script downloads a fresh copy of itself from the
+#     specified URL and replaces the current version.
 #
 #   • When running normally, it:
 #         1. Waits for a CD to be inserted (using whipper for detection).
@@ -28,7 +31,32 @@
 #
 
 # --------------------------------------------------
-# Preliminary: Auto-install Required Dependencies
+# Section A: Update Routine (--update)
+# --------------------------------------------------
+if [ "$1" == "--update" ]; then
+    # URL for the latest version of this script.
+    UPDATE_URL="https://raw.githubusercontent.com/help-for-me/test/refs/heads/main/cd_ripper.sh?token=GHSAT0AAAAAAC6GZ5P2TNSKWRJ4NBROREDYZ46KQRQ"
+    # Determine the absolute path to this script.
+    SCRIPT_PATH="$(readlink -f "$0")"
+    TMPFILE=$(mktemp /tmp/cd_ripper.sh.XXXXXX)
+    
+    echo "Downloading the latest version of cd_ripper.sh..."
+    curl -sSL "$UPDATE_URL" -o "$TMPFILE"
+    
+    if [ $? -eq 0 ]; then
+        chmod +x "$TMPFILE"
+        # Overwrite the current script file.
+        mv "$TMPFILE" "$SCRIPT_PATH"
+        echo "Update successful. Please re-run the script."
+        exit 0
+    else
+        echo "Update failed. Please check your network connection or URL."
+        exit 1
+    fi
+fi
+
+# --------------------------------------------------
+# Section B: Auto-install Required Dependencies
 # --------------------------------------------------
 # Define a mapping between required command names and their Debian package names.
 declare -A pkgMap=(
@@ -53,7 +81,7 @@ if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
 fi
 
 # --------------------------------------------------
-# Section 0: Self‑Installation Routine (--install)
+# Section C: Self‑Installation Routine (--install)
 # --------------------------------------------------
 if [ "$1" == "--install" ]; then
     # Determine the absolute path of this script.
@@ -88,14 +116,14 @@ EOF
 fi
 
 # --------------------------------------------------
-# Section 1: Preliminary Checks (redundant now but kept for safety)
+# Section D: Preliminary Checks (for safety)
 # --------------------------------------------------
 for cmd in dialog whipper beet eject curl; do
     command -v "$cmd" >/dev/null || { echo "Error: '$cmd' is not installed." >&2; exit 1; }
 done
 
 # --------------------------------------------------
-# Section 2: Configuration (via Dialog)
+# Section E: Configuration (via Dialog)
 # --------------------------------------------------
 # We will store configuration in /etc/cd_ripper.conf.
 # This file is auto‑generated (and should not be manually edited by the user).
@@ -121,7 +149,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
         CONFIG_DATA="TEMP_RIP_DIR=\"$TEMP_RIP_DIR\"
 FINAL_DEST=\"$FINAL_DEST\"
 DISCORD_WEBHOOK_URL=\"$DISCORD_WEBHOOK_URL\""
-        # Try to write to CONFIG_FILE; if not permitted, try with sudo.
         if ! echo "$CONFIG_DATA" | sudo tee "$CONFIG_FILE" >/dev/null; then
             echo "Failed to write configuration to $CONFIG_FILE. Exiting."
             exit 1
@@ -140,12 +167,12 @@ source "$CONFIG_FILE"
 mkdir -p "$TEMP_RIP_DIR"
 
 # --------------------------------------------------
-# Section 3: Global Variables
+# Section F: Global Variables
 # --------------------------------------------------
 DRIVE_OFFSET=""
 
 # --------------------------------------------------
-# Section 4: Helper Functions
+# Section G: Helper Functions
 # --------------------------------------------------
 send_discord() {
     # Sends a generic message to Discord.
@@ -234,7 +261,7 @@ process_cd() {
 }
 
 # --------------------------------------------------
-# Section 5: Main Loop
+# Section H: Main Loop
 # --------------------------------------------------
 while true; do
     dialog --infobox "Waiting for a CD to be inserted...\n\nPlease insert a CD." 5 50
