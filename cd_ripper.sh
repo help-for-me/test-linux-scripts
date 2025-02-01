@@ -20,7 +20,7 @@
 #
 #   • When running normally, it:
 #         1. Attempts to start the beets Web UI (if not already running) and displays the host IP and port.
-#         2. Waits for a CD to be inserted (using whipper for detection).
+#         2. Waits for a CD to be inserted (using whipper for detection), displaying the Beets Web UI URL.
 #         3. On the first CD, extracts the drive offset from whipper’s output and sends a
 #            Discord notification (including the offset).
 #         4. Rips the CD using that offset into a temporary directory.
@@ -188,10 +188,10 @@ fi
 # Determine the primary IP address.
 IP=$(hostname -I | awk '{print $1}')
 WEB_PORT=8337  # Default port for beets Web UI.
-echo "Beets Web UI is available at: http://$IP:$WEB_PORT"
-# Optionally, you could display this info via dialog if running interactively:
+WEB_URL="http://$IP:$WEB_PORT"
+echo "Beets Web UI is available at: $WEB_URL"
 if [ -t 0 ]; then
-    dialog --msgbox "Beets Web UI is available at: http://$IP:$WEB_PORT" 8 60
+    dialog --msgbox "Beets Web UI is available at: $WEB_URL" 8 60
 fi
 
 # --------------------------------------------------
@@ -293,11 +293,21 @@ process_cd() {
 # --------------------------------------------------
 # Section I: Final Confirmation and Main Loop
 # --------------------------------------------------
-echo "Configuration and startup complete. Entering main loop for CD ripping."
+# Display final startup message including Beets Web UI info.
+FINAL_MSG="Configuration and startup complete.
+Beets Web UI is available at: $WEB_URL
+
+Waiting for a CD to be inserted..."
+if [ -t 0 ]; then
+    dialog --msgbox "$FINAL_MSG" 10 60
+else
+    echo "$FINAL_MSG"
+fi
 sleep 2
 
 while true; do
-    dialog --infobox "Waiting for a CD to be inserted...\n\nPlease insert a CD." 5 50
+    # Display the waiting message along with the Beets Web UI info.
+    dialog --infobox "Beets Web UI: $WEB_URL\n\nWaiting for a CD to be inserted...\nPlease insert a CD." 8 60
     sleep 2
 
     # Process the CD if one is detected.
