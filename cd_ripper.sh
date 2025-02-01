@@ -19,19 +19,19 @@
 #     specified URL and replaces the current version.
 #
 #   • When running normally, it:
-#         1. Waits for a CD to be inserted (using whipper for detection).
-#         2. On the first CD, extracts the drive offset from whipper’s output and sends a
+#         1. Attempts to start the beets Web UI (if not already running) and displays the host IP and port.
+#         2. Waits for a CD to be inserted (using whipper for detection).
+#         3. On the first CD, extracts the drive offset from whipper’s output and sends a
 #            Discord notification (including the offset).
-#         3. Rips the CD using that offset into a temporary directory.
-#         4. Uses beets to tag, rename, and add artwork.
-#         5. Moves the album to a final location with the structure:
+#         4. Rips the CD using that offset into a temporary directory.
+#         5. Uses beets to tag, rename, and add artwork.
+#         6. Moves the album to a final location with the structure:
 #                [FINAL_DEST]/[artist]/[artist] - [album] - [year]/
-#         6. Sends a Discord notification for success or failure.
-#         7. Ejects the CD (without attempting to “close” the drive).
+#         7. Sends a Discord notification for success or failure.
+#         8. Ejects the CD (without attempting to “close” the drive).
 #
-# Note: This script does not configure or start the beets web UI. It only calls the
-#       "beet import" command to tag/rename your music. To use the beets web UI, configure
-#       and run "beet web" separately.
+# Note: This script does not perform any additional configuration for the beets Web UI.
+#       It merely starts it (if not already running) and displays the URL.
 #
 # Dependencies: dialog, whipper, beets, eject, curl, systemctl (for installation)
 #
@@ -149,10 +149,10 @@ if [ ! -f "$CONFIG_FILE" ]; then
         echo "No configuration file found and not running interactively. Using default configuration values."
         TEMP_RIP_DIR="/tmp/cd_ripper"
         FINAL_DEST="/var/lib/cd_ripper"
-        DISCORD_WEBHOOK_URL=""  # Set to an empty string if you don't want notifications.
+        DISCORD_WEBHOOK_URL=""  # Leave empty if you don't want notifications.
     fi
 
-    # Validate basic input; if defaults were used, they should be non-empty.
+    # Validate basic input; TEMP_RIP_DIR and FINAL_DEST must be set.
     if [ -z "$TEMP_RIP_DIR" ] || [ -z "$FINAL_DEST" ]; then
         echo "Error: TEMP_RIP_DIR and FINAL_DEST must be set. Exiting."
         exit 1
@@ -177,12 +177,30 @@ source "$CONFIG_FILE"
 mkdir -p "$TEMP_RIP_DIR"
 
 # --------------------------------------------------
-# Section F: Global Variables
+# Section F: Start beets Web UI and Display Access Info
+# --------------------------------------------------
+# Check if beets Web UI is already running; if not, start it in the background.
+if ! pgrep -f "beet web" >/dev/null; then
+    echo "Starting beets Web UI in background..."
+    nohup beet web >/dev/null 2>&1 &
+    sleep 2
+fi
+# Determine the primary IP address.
+IP=$(hostname -I | awk '{print $1}')
+WEB_PORT=8337  # Default port for beets Web UI.
+echo "Beets Web UI is available at: http://$IP:$WEB_PORT"
+# Optionally, you could display this info via dialog if running interactively:
+if [ -t 0 ]; then
+    dialog --msgbox "Beets Web UI is available at: http://$IP:$WEB_PORT" 8 60
+fi
+
+# --------------------------------------------------
+# Section G: Global Variables
 # --------------------------------------------------
 DRIVE_OFFSET=""
 
 # --------------------------------------------------
-# Section G: Helper Functions
+# Section H: Helper Functions
 # --------------------------------------------------
 send_discord() {
     # Sends a generic message to Discord.
@@ -273,9 +291,9 @@ process_cd() {
 }
 
 # --------------------------------------------------
-# Section H: Final Confirmation and Main Loop
+# Section I: Final Confirmation and Main Loop
 # --------------------------------------------------
-echo "Configuration complete. Entering main loop. Waiting for a CD to be inserted..."
+echo "Configuration and startup complete. Entering main loop for CD ripping."
 sleep 2
 
 while true; do
