@@ -297,9 +297,9 @@ process_cd() {
 FINAL_MSG="Configuration and startup complete.
 Beets Web UI is available at: http://$IP:$WEB_PORT
 
+
 Waiting for a CD to be inserted...
-Please insert a CD.
-(You can click the URL above if your terminal supports it.)"
+Please insert a CD."
 
 if [ -t 0 ]; then
     dialog --msgbox "$FINAL_MSG" 10 60
