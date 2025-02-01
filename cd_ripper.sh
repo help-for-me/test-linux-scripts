@@ -4,11 +4,13 @@
 # This script automates CD ripping using whipper, beets, and dialog for user input.
 #
 # Features:
-#   • On first interactive run (if no configuration file exists), prompt via dialog for:
-#         - Temporary ripping directory
-#         - Final destination directory for processed CDs
-#         - Discord webhook URL for notifications
-#     Then automatically write these settings (read-only) to a configuration file.
+#   • On first run, if no configuration file exists:
+#         - If running interactively, prompt via dialog for:
+#             - Temporary ripping directory
+#             - Final destination directory for processed CDs
+#             - Discord webhook URL for notifications
+#         - Otherwise, fall back to default values.
+#     The configuration is then written (read-only) to /etc/cd_ripper.conf.
 #
 #   • When run with "--install", the script installs itself as a systemd service so that
 #     it runs automatically on boot.
@@ -35,12 +37,13 @@
 # --------------------------------------------------
 if [ "$1" == "--update" ]; then
     # URL for the latest version of this script.
-    UPDATE_URL="https://raw.githubusercontent.com/help-for-me/test/refs/heads/main/cd_ripper.sh?token=GHSAT0AAAAAAC6GZ5P2TNSKWRJ4NBROREDYZ46KQRQ"
+    UPDATE_URL="https://raw.githubusercontent.com/help-for-me/test-linux-scripts/refs/heads/main/cd_ripper.sh"
     # Determine the absolute path to this script.
     SCRIPT_PATH="$(readlink -f "$0")"
     TMPFILE=$(mktemp /tmp/cd_ripper.sh.XXXXXX)
     
-    echo "Downloading the latest version of cd_ripper.sh..."
+    echo "Downloading the latest version of cd_ripper.sh from:"
+    echo "$UPDATE_URL"
     curl -sSL "$UPDATE_URL" -o "$TMPFILE"
     
     if [ $? -eq 0 ]; then
@@ -58,7 +61,7 @@ fi
 # --------------------------------------------------
 # Section B: Auto-install Required Dependencies
 # --------------------------------------------------
-# Define a mapping between required command names and their Debian package names.
+# Mapping required commands to their Debian package names.
 declare -A pkgMap=(
     ["dialog"]="dialog"
     ["whipper"]="whipper"
@@ -123,44 +126,47 @@ for cmd in dialog whipper beet eject curl; do
 done
 
 # --------------------------------------------------
-# Section E: Configuration (via Dialog)
+# Section E: Configuration (via Dialog or Defaults)
 # --------------------------------------------------
-# We will store configuration in /etc/cd_ripper.conf.
-# This file is auto‑generated (and should not be manually edited by the user).
+# The configuration will be stored in /etc/cd_ripper.conf.
 CONFIG_FILE="/etc/cd_ripper.conf"
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    # If running interactively, prompt the user for configuration values.
     if [ -t 0 ]; then
+        # Interactive mode: prompt using dialog.
         TEMP_RIP_DIR=$(dialog --stdout --title "Temporary Ripping Directory" \
             --inputbox "Enter the temporary directory where CDs will be ripped:" 8 60)
         FINAL_DEST=$(dialog --stdout --title "Final Destination Directory" \
             --inputbox "Enter the final destination directory for processed CDs:" 8 60)
         DISCORD_WEBHOOK_URL=$(dialog --stdout --title "Discord Webhook URL" \
             --inputbox "Enter the Discord webhook URL for notifications:" 8 60)
-
-        # Validate input (basic check).
-        if [ -z "$TEMP_RIP_DIR" ] || [ -z "$FINAL_DEST" ] || [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "All configuration values are required. Exiting."
-            exit 1
-        fi
-
-        # Write the configuration file (as root if needed).
-        CONFIG_DATA="TEMP_RIP_DIR=\"$TEMP_RIP_DIR\"
-FINAL_DEST=\"$FINAL_DEST\"
-DISCORD_WEBHOOK_URL=\"$DISCORD_WEBHOOK_URL\""
-        if ! echo "$CONFIG_DATA" | sudo tee "$CONFIG_FILE" >/dev/null; then
-            echo "Failed to write configuration to $CONFIG_FILE. Exiting."
-            exit 1
-        fi
-        echo "Configuration saved to $CONFIG_FILE."
     else
-        echo "Error: No configuration file found and not running interactively." >&2
+        # Non-interactive mode: use default values.
+        echo "No configuration file found and not running interactively. Using default configuration values."
+        TEMP_RIP_DIR="/tmp/cd_ripper"
+        FINAL_DEST="/var/lib/cd_ripper"
+        DISCORD_WEBHOOK_URL=""  # Set to an empty string if you don't want notifications.
+    fi
+
+    # Validate basic input; if defaults were used, they should be non-empty.
+    if [ -z "$TEMP_RIP_DIR" ] || [ -z "$FINAL_DEST" ]; then
+        echo "Error: TEMP_RIP_DIR and FINAL_DEST must be set. Exiting."
         exit 1
     fi
+
+    CONFIG_DATA="TEMP_RIP_DIR=\"$TEMP_RIP_DIR\"
+FINAL_DEST=\"$FINAL_DEST\"
+DISCORD_WEBHOOK_URL=\"$DISCORD_WEBHOOK_URL\""
+    
+    # Write the configuration file. (Uses sudo if necessary.)
+    if ! echo "$CONFIG_DATA" | sudo tee "$CONFIG_FILE" >/dev/null; then
+        echo "Failed to write configuration to $CONFIG_FILE. Exiting."
+        exit 1
+    fi
+    echo "Configuration saved to $CONFIG_FILE."
 fi
 
-# Load configuration (do not allow user to edit manually).
+# Load configuration.
 source "$CONFIG_FILE"
 
 # Ensure the temporary directory exists.
@@ -177,8 +183,10 @@ DRIVE_OFFSET=""
 send_discord() {
     # Sends a generic message to Discord.
     local message="$1"
-    curl -s -H "Content-Type: application/json" -X POST \
-         -d "{\"content\": \"${message//\"/\\\"}\"}" "$DISCORD_WEBHOOK_URL" >/dev/null 2>&1
+    if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+        curl -s -H "Content-Type: application/json" -X POST \
+             -d "{\"content\": \"${message//\"/\\\"}\"}" "$DISCORD_WEBHOOK_URL" >/dev/null 2>&1
+    fi
 }
 
 notify_success() {
@@ -224,7 +232,7 @@ process_cd() {
     rm -rf "$TEMP_RIP_DIR"/*
     dialog --infobox "Ripping the CD...\nPlease wait." 5 50
 
-    # Rip the disc using the determined offset (adjust options as needed).
+    # Rip the disc using the determined offset.
     if ! whipper rip --offset "$DRIVE_OFFSET" --output "$TEMP_RIP_DIR"; then
         dialog --msgbox "Error during ripping." 5 50
         notify_failure "Error during ripping."
@@ -267,7 +275,7 @@ while true; do
     dialog --infobox "Waiting for a CD to be inserted...\n\nPlease insert a CD." 5 50
     sleep 2
 
-    # If a CD is detected, process it.
+    # Process the CD if one is detected.
     if process_cd; then
         sleep 5
     else
