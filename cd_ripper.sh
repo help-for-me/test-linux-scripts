@@ -293,10 +293,10 @@ process_cd() {
 # --------------------------------------------------
 # Section I: Final Confirmation and Main Loop
 # --------------------------------------------------
-# Construct a final message including the Beets Web UI info.
 FINAL_MSG="Configuration and startup complete.
-Beets Web UI is available at: http://$IP:$WEB_PORT
 
+Beets Web UI is available at:
+http://$IP:$WEB_PORT
 
 Waiting for a CD to be inserted...
 Please insert a CD."
@@ -309,14 +309,12 @@ fi
 sleep 2
 
 while true; do
-    # Display the waiting message along with the Beets Web UI info.
     dialog --infobox "Beets Web UI: http://$IP:$WEB_PORT
+
 Waiting for a CD to be inserted...
-Please insert a CD.
-(You may click the URL if supported by your terminal.)" 10 60
+Please insert a CD." 10 60
     sleep 2
 
-    # Process the CD if one is detected.
     if process_cd; then
         sleep 5
     else
