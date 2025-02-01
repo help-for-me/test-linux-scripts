@@ -29,6 +29,10 @@
 #         6. Sends a Discord notification for success or failure.
 #         7. Ejects the CD (without attempting to “close” the drive).
 #
+# Note: This script does not configure or start the beets web UI. It only calls the
+#       "beet import" command to tag/rename your music. To use the beets web UI, configure
+#       and run "beet web" separately.
+#
 # Dependencies: dialog, whipper, beets, eject, curl, systemctl (for installation)
 #
 
@@ -269,8 +273,11 @@ process_cd() {
 }
 
 # --------------------------------------------------
-# Section H: Main Loop
+# Section H: Final Confirmation and Main Loop
 # --------------------------------------------------
+echo "Configuration complete. Entering main loop. Waiting for a CD to be inserted..."
+sleep 2
+
 while true; do
     dialog --infobox "Waiting for a CD to be inserted...\n\nPlease insert a CD." 5 50
     sleep 2
