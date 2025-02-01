@@ -182,16 +182,21 @@ mkdir -p "$TEMP_RIP_DIR"
 # Check if beets Web UI is already running; if not, start it in the background.
 if ! pgrep -f "beet web" >/dev/null; then
     echo "Starting beets Web UI in background..."
-    nohup beet web >/dev/null 2>&1 &
+    nohup beet web --host 0.0.0.0 --port 8337 >/dev/null 2>&1 &
     sleep 2
 fi
+
 # Determine the primary IP address.
 IP=$(hostname -I | awk '{print $1}')
-WEB_PORT=8337  # Default port for beets Web UI.
+WEB_PORT=8337  # The port we specified.
 WEB_URL="http://$IP:$WEB_PORT"
 echo "Beets Web UI is available at: $WEB_URL"
 if [ -t 0 ]; then
-    dialog --msgbox "Beets Web UI is available at: $WEB_URL" 8 60
+    dialog --msgbox "Beets Web UI is available at:
+$WEB_URL
+
+Waiting for a CD to be inserted...
+Please insert a CD." 10 60
 fi
 
 # --------------------------------------------------
