@@ -24,8 +24,33 @@
 #         6. Sends a Discord notification for success or failure.
 #         7. Ejects the CD (without attempting to “close” the drive).
 #
-# Dependencies: dialog, whipper, beet, eject, curl, systemctl (for installation)
+# Dependencies: dialog, whipper, beets, eject, curl, systemctl (for installation)
 #
+
+# --------------------------------------------------
+# Preliminary: Auto-install Required Dependencies
+# --------------------------------------------------
+# Define a mapping between required command names and their Debian package names.
+declare -A pkgMap=(
+    ["dialog"]="dialog"
+    ["whipper"]="whipper"
+    ["beet"]="beets"
+    ["eject"]="eject"
+    ["curl"]="curl"
+)
+
+MISSING_PACKAGES=()
+for cmd in "${!pkgMap[@]}"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        MISSING_PACKAGES+=("${pkgMap[$cmd]}")
+    fi
+done
+
+if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
+    echo "Missing dependencies detected: ${MISSING_PACKAGES[*]}"
+    echo "Updating package lists and installing missing packages..."
+    apt-get update && apt-get install -y "${MISSING_PACKAGES[@]}"
+fi
 
 # --------------------------------------------------
 # Section 0: Self‑Installation Routine (--install)
@@ -63,7 +88,7 @@ EOF
 fi
 
 # --------------------------------------------------
-# Section 1: Preliminary Checks
+# Section 1: Preliminary Checks (redundant now but kept for safety)
 # --------------------------------------------------
 for cmd in dialog whipper beet eject curl; do
     command -v "$cmd" >/dev/null || { echo "Error: '$cmd' is not installed." >&2; exit 1; }
